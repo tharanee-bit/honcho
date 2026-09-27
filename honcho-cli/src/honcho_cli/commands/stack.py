@@ -7,6 +7,8 @@ and a one-shot ``HONCHO_BASE_URL=...`` hint instead.
 
 from __future__ import annotations
 
+import sys
+
 import typer
 from rich.console import Console
 
@@ -76,7 +78,7 @@ def _validate_setup(setup: str | None) -> str | None:
             f"Unknown setup mode {setup!r}. Use --setup basic or --setup advanced.",
             {"setup": setup},
         )
-    if use_json():
+    if use_json() or not sys.stdin.isatty():
         _die(
             "SETUP_REQUIRES_TTY",
             "honcho start --setup is interactive. Run it in a terminal without --json.",

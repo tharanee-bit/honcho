@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+from types import SimpleNamespace
 
 import pytest
+import typer
+from honcho_cli.commands.stack import _validate_setup
 from honcho_cli.local.docker import image_is_digest, image_repository
 from honcho_cli.main import app
 from typer.testing import CliRunner
@@ -127,11 +130,37 @@ def test_start_setup_requires_tty(cfg, runner):
     assert json.loads(result.stderr)["error"]["code"] == "SETUP_REQUIRES_TTY"
 
 
+def test_validate_setup_requires_stdin_tty_even_when_stdout_is_tty(monkeypatch):
+    monkeypatch.setattr("honcho_cli.commands.stack.use_json", lambda: False)
+    monkeypatch.setattr("sys.stdin", SimpleNamespace(isatty=lambda: False))
+
+    with pytest.raises(typer.Exit) as exc_info:
+        _validate_setup("basic")
+
+    assert exc_info.value.exit_code == 1
+
+
+def test_start_setup_requires_stdin_tty_at_cli_entrypoint(cfg, runner, monkeypatch):
+    monkeypatch.setattr("honcho_cli.commands.stack.use_json", lambda: False)
+    health_calls = []
+    monkeypatch.setattr(
+        "honcho_cli.commands.stack.stack_healthy",
+        lambda profile: health_calls.append(profile) or False,
+    )
+
+    result = runner.invoke(app, ["start", "--setup", "basic"], input="")
+
+    assert result.exit_code == 1
+    assert json.loads(result.stderr)["error"]["code"] == "SETUP_REQUIRES_TTY"
+    assert health_calls == []
+
+
 def test_start_setup_recreates_when_already_running(cfg, runner, monkeypatch):
     from honcho_cli.local.setup import SetupAnswers
 
     ups: list[tuple[str, ...]] = []
     monkeypatch.setattr("honcho_cli.commands.stack.use_json", lambda: False)
+    monkeypatch.setattr("honcho_cli.commands.stack._validate_setup", lambda setup: setup)
     monkeypatch.setattr("honcho_cli.commands.stack.stack_healthy", lambda profile: True)
     monkeypatch.setattr(
         "honcho_cli.commands.stack.compose_up",
